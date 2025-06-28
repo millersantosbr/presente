@@ -1,1 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Preço</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- ZXing Library for Barcode Scanning -->
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        /* Custom styles to ensure a clean look */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* Removes blue tap highlight on mobile */
+        }
+        /* Style for the video feed to ensure it covers its container */
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* Simple animation for screen transitions */
+        .screen {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
 
+    <div id="app-container" class="max-w-lg mx-auto min-h-screen bg-white shadow-lg">
+
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen p-6 flex flex-col items-center justify-center min-h-screen">
+            <div class="text-center w-full">
+                <i data-lucide="shopping-cart" class="w-16 h-16 text-blue-600 mx-auto mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Consulta Preço</h1>
+                <p class="text-gray-500 mb-8">Escaneie o código de barras ou pesquise pelo produto.</p>
+                <div class="space-y-4">
+                    <button id="start-scan-btn" class="w-full bg-blue-600 text-white font-bold py-4 px-4 rounded-xl shadow-md hover:bg-blue-700 active:scale-95 transition-all duration-150 flex items-center justify-center gap-2">
+                        <i data-lucide="scan-line" class="w-6 h-6"></i>
+                        Escanear Código
+                    </button>
+                    <button id="start-search-btn" class="w-full bg-gray-200 text-gray-800 font-bold py-4 px-4 rounded-xl shadow-md hover:bg-gray-300 active:scale-95 transition-all duration-150 flex items-center justify-center gap-2">
+                        <i data-lucide="search" class="w-6 h-6"></i>
+                        Pesquisar Manualmente
+                    </button>
+                </div>
+            </div>
+            <div id="session-timer-display" class="absolute bottom-4 text-xs text-gray-400"></div>
+        </div>
+
+        <!-- Scanner Screen -->
+        <div id="scanner-screen" class="screen hidden bg-black min-h-screen flex flex-col relative">
+            <video id="video" playsinline></video>
+            <!-- Overlay for scanner effect -->
+            <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-3/4 h-1/3 border-4 border-dashed border-white/50 rounded-xl"></div>
+            </div>
+            <div class="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-center">
+                <h2 class="text-white font-semibold text-lg">Aponte para o Código de Barras</h2>
+                <button id="back-from-scanner" class="text-white bg-white/20 rounded-full p-2 hover:bg-white/30">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
+                 <select id="camera-select" class="w-full p-3 rounded-lg bg-white/90 text-black appearance-none text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- Camera options will be populated here -->
+                </select>
+            </div>
+        </div>
+
+        <!-- Manual Search Screen -->
+        <div id="search-screen" class="screen hidden p-6 min-h-screen">
+             <div class="flex items-center mb-6">
+                <button id="back-from-search" class="p-2 rounded-full hover:bg-gray-200">
+                    <i data-lucide="arrow-left" class="w-6 h-6 text-gray-700"></i>
+                </button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-4">Pesquisa Manual</h1>
+            </div>
+            <form id="search-form">
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="Digite o código ou nome" class="w-full text-lg p-4 pr-12 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                     <button type="submit" class="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-500 hover:text-blue-600">
+                        <i data-lucide="search" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" class="screen hidden p-6 min-h-screen flex flex-col justify-between">
+            <div>
+                <div class="flex items-center mb-6">
+                    <i data-lucide="check-circle-2" class="w-8 h-8 text-green-500"></i>
+                    <h1 class="text-2xl font-bold text-gray-800 ml-3">Produto Encontrado</h1>
+                </div>
+                <div id="product-details" class="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">PRODUTO</p>
+                        <p id="result-name" class="text-2xl font-bold text-gray-900">Nome do Produto Incrível</p>
+                    </div>
+                    <div class="text-center bg-blue-600 text-white -mx-6 px-6 py-8">
+                        <p class="text-lg font-medium text-blue-100">PREÇO</p>
+                        <p id="result-price" class="text-6xl font-extrabold tracking-tighter">R$ 99,99</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 pt-4">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">CÓD. BARRAS</p>
+                            <p id="result-barcode" class="text-lg font-mono text-gray-800">7891234567890</p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">CÓD. INTERNO</p>
+                            <p id="result-internal-code" class="text-lg font-mono text-gray-800">12345</p>
+                        </div>
+                    </div>
+                </div>
+                <p id="result-timestamp" class="text-center text-sm text-gray-400 mt-4">Consulta realizada em: 28/06/2025 12:30:15</p>
+            </div>
+             <button id="new-query-btn" class="w-full bg-blue-600 text-white font-bold py-4 px-4 rounded-xl shadow-md hover:bg-blue-700 active:scale-95 transition-all duration-150 mt-8">
+                Nova Consulta
+            </button>
+        </div>
+
+        <!-- Notification/Error Modal -->
+        <div id="notification-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl shadow-xl p-8 text-center max-w-sm w-full">
+                <i id="notification-icon" data-lucide="x-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                <h3 id="notification-title" class="text-2xl font-bold text-gray-800">Produto não encontrado</h3>
+                <p id="notification-message" class="text-gray-600 mt-2 mb-6">O código informado não corresponde a nenhum item em nosso sistema.</p>
+                <button id="close-notification-btn" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-xl hover:bg-gray-800">
+                    Tentar Novamente
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const screens = {
+                home: document.getElementById('home-screen'),
+                scanner: document.getElementById('scanner-screen'),
+                search: document.getElementById('search-screen'),
+                result: document.getElementById('result-screen')
+            };
+            const startScanBtn = document.getElementById('start-scan-btn');
+            const startSearchBtn = document.getElementById('start-search-btn');
+            const backFromScannerBtn = document.getElementById('back-from-scanner');
+            const backFromSearchBtn = document.getElementById('back-from-search');
+            const newQueryBtn = document.getElementById('new-query-btn');
+            const searchForm = document.getElementById('search-form');
+            const searchInput = document.getElementById('search-input');
+            const videoEl = document.getElementById('video');
+            const cameraSelect = document.getElementById('camera-select');
+
+            // Result fields
+            const resultName = document.getElementById('result-name');
+            const resultPrice = document.getElementById('result-price');
+            const resultBarcode = document.getElementById('result-barcode');
+            const resultInternalCode = document.getElementById('result-internal-code');
+            const resultTimestamp = document.getElementById('result-timestamp');
+            
+            // Notification modal
+            const notificationModal = document.getElementById('notification-modal');
+            const notificationIcon = document.getElementById('notification-icon');
+            const notificationTitle = document.getElementById('notification-title');
+            const notificationMessage = document.getElementById('notification-message');
+            const closeNotificationBtn = document.getElementById('close-notification-btn');
+
+            // --- Mock Database ---
+            const mockDatabase = [
+                { internalCode: '1001', barcode: '7891000315507', name: 'Refrigerante Cola 2L', price: 8.50 },
+                { internalCode: '1002', barcode: '7891991010138', name: 'Biscoito Recheado Chocolate 140g', price: 3.99 },
+                { internalCode: '1003', barcode: '7894900011517', name: 'Leite Integral Longa Vida 1L', price: 5.25 },
+                { internalCode: '2004', barcode: '7622210713193', name: 'Chocolate ao Leite 90g', price: 7.80 },
+                { internalCode: '2005', barcode: '7896065800015', name: 'Sabão em Pó 1kg', price: 15.90 },
+            ];
+
+            // --- State Management ---
+            let currentScreen = 'home';
+            let codeReader = null;
+            let sessionTimeout;
+            const SESSION_DURATION = 10 * 60 * 1000; // 10 minutes
+
+            // --- Functions ---
+
+            // Function to switch between screens
+            function showScreen(screenName) {
+                Object.values(screens).forEach(screen => screen.classList.add('hidden'));
+                if (screens[screenName]) {
+                    screens[screenName].classList.remove('hidden');
+                }
+                currentScreen = screenName;
+                resetSessionTimer();
+            }
+
+            // Function to display notifications/errors
+            function showNotification(title, message, isError = true) {
+                notificationTitle.textContent = title;
+                notificationMessage.textContent = message;
+                notificationIcon.setAttribute('data-lucide', isError ? 'x-circle' : 'party-popper');
+                notificationIcon.className = `w-16 h-16 mx-auto mb-4 ${isError ? 'text-red-500' : 'text-yellow-500'}`;
+                lucide.createIcons(); // Redraw icons
+                notificationModal.classList.remove('hidden');
+            }
+
+            // Function to find a product in our mock database
+            function findProduct(query) {
+                const searchTerm = query.toLowerCase().trim();
+                return mockDatabase.find(product =>
+                    product.barcode.toLowerCase() === searchTerm ||
+                    product.internalCode.toLowerCase() === searchTerm ||
+                    product.name.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            // Function to display product results
+            function displayResult(product) {
+                if (product) {
+                    resultName.textContent = product.name;
+                    resultPrice.textContent = `R$ ${product.price.toFixed(2).replace('.', ',')}`;
+                    resultBarcode.textContent = product.barcode;
+                    resultInternalCode.textContent = product.internalCode;
+                    const now = new Date();
+                    resultTimestamp.textContent = `Consulta: ${now.toLocaleString('pt-BR')}`;
+                    showScreen('result');
+                } else {
+                    showNotification('Produto não encontrado', 'O código ou nome informado não foi localizado.');
+                }
+            }
+            
+            // --- Scanner Logic ---
+            async function initScanner() {
+                try {
+                    codeReader = new ZXing.BrowserMultiFormatReader();
+                    const videoInputDevices = await codeReader.listVideoInputDevices();
+                    
+                    if (videoInputDevices.length > 0) {
+                        // Populate camera selector
+                        cameraSelect.innerHTML = '';
+                        videoInputDevices.forEach(device => {
+                            const option = document.createElement('option');
+                            option.value = device.deviceId;
+                            option.textContent = device.label || `Câmera ${cameraSelect.options.length + 1}`;
+                            cameraSelect.appendChild(option);
+                        });
+                        
+                        // Start scanning with the first camera
+                        startScanning(videoInputDevices[0].deviceId);
+
+                        // Add event listener to switch cameras
+                        cameraSelect.onchange = () => {
+                             startScanning(cameraSelect.value);
+                        };
+
+                    } else {
+                         showNotification('Nenhuma câmera encontrada', 'Não foi possível acessar a câmera do seu dispositivo.');
+                         showScreen('home');
+                    }
+                } catch (error) {
+                    console.error("Error initializing scanner:", error);
+                    showNotification('Erro de Câmera', 'Não foi possível iniciar a câmera. Verifique as permissões do navegador.');
+                    showScreen('home');
+                }
+            }
+
+            function startScanning(deviceId) {
+                // Reset previous reader instance to stop any active stream.
+                if (codeReader) {
+                    codeReader.reset();
+                }
+                
+                codeReader.decodeFromVideoDevice(deviceId, 'video', (result, err) => {
+                    if (result) {
+                        console.log('Barcode found:', result.text);
+                        // Vibrate for feedback on success
+                        if ('vibrate' in navigator) navigator.vibrate(100);
+                        stopScanner();
+                        displayResult(findProduct(result.text));
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Scanning error:', err);
+                        stopScanner();
+                        showNotification('Erro no Scanner', 'Ocorreu um problema ao ler o código.');
+                        showScreen('home');
+                    }
+                });
+                console.log(`Started scanning with device: ${deviceId}`);
+            }
+
+            function stopScanner() {
+                if (codeReader) {
+                    codeReader.reset();
+                    console.log('Scanner stopped.');
+                }
+            }
+            
+            // --- Session Timer Logic ---
+            function resetSessionTimer() {
+                clearTimeout(sessionTimeout);
+                sessionTimeout = setTimeout(() => {
+                    showNotification('Sessão Expirada', 'Sua sessão terminou. Por favor, inicie uma nova consulta.', false);
+                    stopScanner(); // Ensure camera is off
+                    setTimeout(() => showScreen('home'), 2000); // Wait a bit before resetting screen
+                }, SESSION_DURATION);
+                updateTimerDisplay();
+            }
+
+            function updateTimerDisplay() {
+                // This is a simple visual cue, not the actual timer logic
+                const sessionTimerDisplay = document.getElementById('session-timer-display');
+                if(sessionTimerDisplay) {
+                     sessionTimerDisplay.textContent = `Sessão expira em 10 minutos.`;
+                }
+            }
+
+            // --- Event Listeners ---
+            startScanBtn.addEventListener('click', () => {
+                showScreen('scanner');
+                initScanner();
+            });
+
+            startSearchBtn.addEventListener('click', () => {
+                showScreen('search');
+                searchInput.focus();
+            });
+
+            backFromScannerBtn.addEventListener('click', () => {
+                stopScanner();
+                showScreen('home');
+            });
+
+            backFromSearchBtn.addEventListener('click', () => {
+                showScreen('home');
+            });
+
+            newQueryBtn.addEventListener('click', () => {
+                showScreen('home');
+            });
+
+            searchForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const query = searchInput.value;
+                if (query) {
+                    displayResult(findProduct(query));
+                    searchInput.value = '';
+                }
+            });
+            
+            closeNotificationBtn.addEventListener('click', () => {
+                notificationModal.classList.add('hidden');
+                // If the session expired, go home. Otherwise, just close modal.
+                if (notificationTitle.textContent === 'Sessão Expirada') {
+                    showScreen('home');
+                }
+            });
+
+            // --- Initial Setup ---
+            lucide.createIcons();
+            showScreen('home');
+        });
+    </script>
+</body>
+</html>
